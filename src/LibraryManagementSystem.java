@@ -9,6 +9,7 @@ public class LibraryManagementSystem {
     private Connection conn;
     private JTextArea viewBookListArea;
     private JTextArea removeBookListArea;
+    private JTextArea viewStudentsArea; // New JTextArea for students
 
     public static void main(String[] args) {
         new LibraryManagementSystem();
@@ -59,16 +60,21 @@ public class LibraryManagementSystem {
         JPanel homePanel = new JPanel(new BorderLayout());
 
         // Side Menu Panel
-        JPanel sideMenu = new JPanel(new GridLayout(4, 1, 0, 10));
+        JPanel sideMenu = new JPanel(new GridLayout(6, 1, 0, 10)); // Updated to 6 rows for extra button
         JButton addBookButton = new JButton("Add Book");
         JButton viewBookButton = new JButton("View Books");
         JButton removeBookButton = new JButton("Remove Book");
         JButton changeStatusButton = new JButton("Mark Book as Occupied");
+        JButton changeStatusAvailableButton = new JButton("Mark Book as Available");
+        JButton viewStudentsButton = new JButton("View Students and Occupied Books"); // New Button
 
+        // Add buttons to side menu
         sideMenu.add(addBookButton);
         sideMenu.add(viewBookButton);
         sideMenu.add(removeBookButton);
         sideMenu.add(changeStatusButton);
+        sideMenu.add(changeStatusAvailableButton);
+        sideMenu.add(viewStudentsButton); // Add new button to view students
 
         // Content Panel with CardLayout
         contentPanel = new JPanel(new CardLayout());
@@ -78,11 +84,16 @@ public class LibraryManagementSystem {
         JPanel viewBookPanel = createViewBookPanel();
         JPanel removeBookPanel = createRemoveBookPanel();
         JPanel markBookOccupiedPanel = createMarkBookOccupiedPanel();
+        JPanel markBookAvailablePanel = createMarkBookAvailablePanel();
+        JPanel viewStudentsPanel = createViewStudentsPanel(); // New panel for students
 
+        // Add panels to content panel
         contentPanel.add(addBookPanel, "Add Book");
         contentPanel.add(viewBookPanel, "View Books");
         contentPanel.add(removeBookPanel, "Remove Book");
         contentPanel.add(markBookOccupiedPanel, "Mark Book Occupied");
+        contentPanel.add(markBookAvailablePanel, "Mark Book Available");
+        contentPanel.add(viewStudentsPanel, "View Students"); // Add new panel
 
         // Button Actions
         addBookButton.addActionListener(e -> switchPanel("Add Book"));
@@ -95,12 +106,26 @@ public class LibraryManagementSystem {
             switchPanel("Remove Book");
         });
         changeStatusButton.addActionListener(e -> switchPanel("Mark Book Occupied"));
+        changeStatusAvailableButton.addActionListener(e -> switchPanel("Mark Book Available"));
+        viewStudentsButton.addActionListener(e -> {
+            updateStudentList(viewStudentsArea); // Fetch students and occupied books
+            switchPanel("View Students");
+        });
 
         homePanel.add(sideMenu, BorderLayout.WEST);
         homePanel.add(contentPanel, BorderLayout.CENTER);
 
         frame.add(homePanel);
         frame.validate();
+    }
+
+    // Panel for viewing students and occupied books
+    private JPanel createViewStudentsPanel() {
+        JPanel panel = new JPanel(new BorderLayout());
+        viewStudentsArea = new JTextArea();
+        viewStudentsArea.setEditable(false);
+        panel.add(new JScrollPane(viewStudentsArea), BorderLayout.CENTER);
+        return panel;
     }
 
     private JPanel createAddBookPanel() {
@@ -165,28 +190,59 @@ public class LibraryManagementSystem {
     }
 
     private JPanel createMarkBookOccupiedPanel() {
-        JPanel panel = new JPanel(new BorderLayout());
+        JPanel panel = new JPanel(new GridLayout(4, 2, 5, 5)); // Fixed layout
+        JLabel bookIdLabel = new JLabel("Enter Book ID:");
         JTextField bookIdField = new JTextField();
-        // Set the preferred size for the input area (width: 200, height: 30)
-        bookIdField.setPreferredSize(new Dimension(200, 30));
+        JLabel studentNameLabel = new JLabel("Enter Student Name:");
+        JTextField studentNameField = new JTextField();
         JButton markOccupiedButton = new JButton("Mark as Occupied");
-
-        panel.add(new JLabel("Enter Book ID to Mark as Occupied:"), BorderLayout.NORTH);
-        panel.add(bookIdField, BorderLayout.CENTER);
-        panel.add(markOccupiedButton, BorderLayout.SOUTH);
 
         markOccupiedButton.addActionListener(e -> {
             try {
                 int bookId = Integer.parseInt(bookIdField.getText());
-                changeBookStatus(bookId, "Occupied");
+                String studentName = studentNameField.getText();
+                if (studentName.isEmpty()) {
+                    JOptionPane.showMessageDialog(frame, "Please enter student name");
+                } else {
+                    changeBookStatus(bookId, "Occupied", studentName);
+                }
             } catch (NumberFormatException ex) {
                 JOptionPane.showMessageDialog(frame, "Invalid Book ID");
             }
         });
 
+        panel.add(bookIdLabel);
+        panel.add(bookIdField);
+        panel.add(studentNameLabel);
+        panel.add(studentNameField);
+        panel.add(new JLabel());
+        panel.add(markOccupiedButton);
+
         return panel;
     }
 
+    private JPanel createMarkBookAvailablePanel() {
+        JPanel panel = new JPanel(new GridLayout(2, 2, 5, 5)); // Improved layout
+        JLabel bookIdLabel = new JLabel("Enter Book ID:");
+        JTextField bookIdField = new JTextField();
+        JButton markAvailableButton = new JButton("Mark as Available");
+
+        markAvailableButton.addActionListener(e -> {
+            try {
+                int bookId = Integer.parseInt(bookIdField.getText());
+                changeBookStatus(bookId, "Available");
+            } catch (NumberFormatException ex) {
+                JOptionPane.showMessageDialog(frame, "Invalid Book ID");
+            }
+        });
+
+        panel.add(bookIdLabel);
+        panel.add(bookIdField);
+        panel.add(new JLabel());
+        panel.add(markAvailableButton);
+
+        return panel;
+    }
 
     private void switchPanel(String panelName) {
         CardLayout cl = (CardLayout) contentPanel.getLayout();
@@ -225,6 +281,23 @@ public class LibraryManagementSystem {
         }
     }
 
+    private void updateStudentList(JTextArea studentListArea) {
+        StringBuilder sb = new StringBuilder();
+        String sql = "SELECT student_name, book_id FROM student_books";
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            while (rs.next()) {
+                String studentName = rs.getString("student_name");
+                int bookId = rs.getInt("book_id");
+                sb.append("Student: ").append(studentName)
+                        .append(", Book ID: ").append(bookId).append("\n");
+            }
+            studentListArea.setText(sb.toString());
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
     private void removeBook(int id) {
         String sql = "DELETE FROM books WHERE id = ?";
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -233,23 +306,62 @@ public class LibraryManagementSystem {
             if (rowsAffected > 0) {
                 JOptionPane.showMessageDialog(frame, "Book removed successfully!");
             } else {
-                JOptionPane.showMessageDialog(frame, "Book ID not found.");
+                JOptionPane.showMessageDialog(frame, "Book ID not found!");
             }
         } catch (SQLException e) {
             e.printStackTrace();
         }
     }
 
-    private void changeBookStatus(int bookId, String status) {
-        String sql = "UPDATE books SET status = ? WHERE id = ?";
-        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setString(1, status);
-            pstmt.setInt(2, bookId);
-            int rowsAffected = pstmt.executeUpdate();
+    private void changeBookStatus(int id, String status, String studentName) {
+        String updateBookSql = "UPDATE books SET status = ? WHERE id = ?";
+        String insertStudentBookSql = "INSERT INTO student_books (student_name, book_id) VALUES (?, ?)";
+
+        try (PreparedStatement updateStmt = conn.prepareStatement(updateBookSql);
+             PreparedStatement insertStmt = conn.prepareStatement(insertStudentBookSql)) {
+            // Update book status
+            updateStmt.setString(1, status);
+            updateStmt.setInt(2, id);
+            int rowsAffected = updateStmt.executeUpdate();
+
             if (rowsAffected > 0) {
-                JOptionPane.showMessageDialog(frame, "Book status updated to 'Occupied' successfully!");
+                // If book is occupied, insert into student_books table
+                if (status.equals("Occupied")) {
+                    insertStmt.setString(1, studentName);
+                    insertStmt.setInt(2, id);
+                    insertStmt.executeUpdate();
+                }
+
+                JOptionPane.showMessageDialog(frame, "Book status updated to " + status);
             } else {
-                JOptionPane.showMessageDialog(frame, "Book ID not found.");
+                JOptionPane.showMessageDialog(frame, "Book ID not found!");
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void changeBookStatus(int id, String status) {
+        String updateBookSql = "UPDATE books SET status = ? WHERE id = ?";
+        String deleteStudentBookSql = "DELETE FROM student_books WHERE book_id = ?";
+
+        try (PreparedStatement updateStmt = conn.prepareStatement(updateBookSql);
+             PreparedStatement deleteStmt = conn.prepareStatement(deleteStudentBookSql)) {
+            // Update book status
+            updateStmt.setString(1, status);
+            updateStmt.setInt(2, id);
+            int rowsAffected = updateStmt.executeUpdate();
+
+            if (rowsAffected > 0) {
+                // If book becomes available, remove from student_books
+                if (status.equals("Available")) {
+                    deleteStmt.setInt(1, id);
+                    deleteStmt.executeUpdate();
+                }
+
+                JOptionPane.showMessageDialog(frame, "Book status updated to " + status);
+            } else {
+                JOptionPane.showMessageDialog(frame, "Book ID not found!");
             }
         } catch (SQLException e) {
             e.printStackTrace();
